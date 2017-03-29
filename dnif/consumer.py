@@ -98,7 +98,7 @@ class AsyncHttpConsumer(AsyncConsumer):
             # TODO: Batch payloads and send as one request
             payload = self._queue.get(block=True)
             try:
-                resp = requests.post(self._url, json=payload, timeout=self._timeout)
+                resp = requests.post(self._url, json=payload, timeout=self._timeout, verify=False)
                 # self._logger.debug(resp.status_code)
             except Exception as ex:
                 self._logger.info('Error uploading log: {0}'.format(ex))
