@@ -15,21 +15,20 @@ class HttpConsumer(Consumer):
     Uploads happen in the background to minimally impact caller performance
     """
 
-    def __init__(self, target_ip, target_port, buffer_size=1024):
+    def __init__(self, url, buffer_size=1024):
         """
         Initialize the Consumer
-        :param target_ip: The IPv4 address
-        :param target_port: The port at which the Adapter is listening
+        :param url: The target URL
         :param buffer_size: Max number of pending payloads to hold (in memory).
         If the queue is full, further payloads will be dropped
         """
-
-        self._url = '{0}:{1}/slug'.format(target_ip, target_port)
+        self._url = url
+        self._timeout = 15
         self._queue = Queue(maxsize=buffer_size)
         self._logger = logging.getLogger('dnif.consumer.http')
 
         # TODO: This shouldn't be a Daemon and should listen for shutdown events.
-        self._thread = threading.Thread(target=self._upload())
+        self._thread = threading.Thread(target=self._upload)
         self._thread.daemon = True
         self._thread.start()
 
@@ -42,6 +41,11 @@ class HttpConsumer(Consumer):
         return True
 
     def send(self, data):
+        """ Send the data to the target endpoint.
+        This method only queues the upload, the upload itself happens asynchronously in the background.
+
+        :param data: Data to upload. Can be dict (key-value pairs) indicating one log statement, or a list of these
+        """
         if isinstance(data, dict):
             data = [data] if self._validate(data) else []
         elif isinstance(data, list):
@@ -59,6 +63,6 @@ class HttpConsumer(Consumer):
             # TODO: Batch payloads and send as one request
             payload = self._queue.get(block=True)
             try:
-                requests.post(self._url, json=payload)
+                requests.post(self._url, json=payload, timeout=self._timeout)
             except Exception as ex:
                 self._logger.info('Error uploading log: {0}'.format(ex))
