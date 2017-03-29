@@ -18,7 +18,7 @@ Typical usages for both of these are given below.
 ```python
 from dnif.consumer import AsyncHttpConsumer
 from dnif.logger import DnifLogger
-dlog = DnifLogger(AsyncHttpConsumer('http://TARGET_IP:PORT/'))
+dlog = DnifLogger(AsyncHttpConsumer('http://TARGET_IP:PORT/json/receive'))
 dlog.log({'key': 'value'})
 ```
 
