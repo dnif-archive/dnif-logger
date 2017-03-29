@@ -10,7 +10,7 @@ class Consumer(object):
         raise NotImplementedError
 
 
-class HttpConsumer(Consumer):
+class AsyncHttpConsumer(Consumer):
     """Consumer that uploads logs to the specified endpoint using HTTP.
     Uploads happen in the background to minimally impact caller performance
     """

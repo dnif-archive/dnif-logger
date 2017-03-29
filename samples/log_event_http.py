@@ -1,11 +1,11 @@
-from dnif.consumer import HttpConsumer
+from dnif.consumer import AsyncHttpConsumer
 from dnif.logger import DnifLogger
 
 url = 'http://TARGET_IP:PORT/'
 max_buffer_size = 1024  # optional
 
 # Initialize DNIF logger using the HTTP Consumer
-dlog = DnifLogger(HttpConsumer(url, buffer_size=max_buffer_size))
+dlog = DnifLogger(AsyncHttpConsumer(url, buffer_size=max_buffer_size))
 
 # Send single log statement
 payload = {
