@@ -1,5 +1,9 @@
+import logging
+
 from dnif.consumer import AsyncHttpConsumer
 from dnif.logger import DnifLogger
+
+logging.basicConfig(level=logging.DEBUG, filename='dnif.log', filemode='a')
 
 url = 'http://TARGET_IP:PORT/json/receive'
 max_buffer_size = 1024  # optional
