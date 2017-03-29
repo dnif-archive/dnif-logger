@@ -27,5 +27,8 @@ across threads (recommended).
 
 ### UDP
 ```python
-# coming soon
+from dnif.consumer import AsyncUDPConsumer
+from dnif.logger import DnifLogger
+dlog = DnifLogger(AsyncUDPConsumer('UDP_IP', UDP_PORT))
+dlog.log('Hello World')
 ```
