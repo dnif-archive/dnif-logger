@@ -1,0 +1,26 @@
+from dnif.consumer import HttpConsumer
+from dnif.logger import DnifLogger
+
+url = 'http://TARGET_IP:PORT/'
+max_buffer_size = 1024  # optional
+
+# Initialize DNIF logger using the HTTP Consumer
+dlog = DnifLogger(HttpConsumer(url, buffer_size=max_buffer_size))
+
+# Send single log statement
+payload = {
+    'key1': 'value1',
+    'key2': 2,
+    'key3': 3.12345,
+    'key4': ['x', 'y', 'z'],
+}
+dlog.log(payload)
+
+# Send multiple log statements at once (bulk send).
+# Order matters. The events will be recorded in the order received.
+payload = [
+    {'key1': 1},
+    {'key1': 2},
+    {'key1': 3},
+]
+dlog.log(payload)
