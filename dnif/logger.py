@@ -12,3 +12,9 @@ class DnifLogger(object):
 
     def log(self, data):
         self._consumer.send(data)
+
+    def start(self, **kwargs):
+        self._consumer.start(**kwargs)
+
+    def stop(self, **kwargs):
+        self._consumer.stop(**kwargs)

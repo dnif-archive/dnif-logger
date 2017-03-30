@@ -1,17 +1,25 @@
 import logging
 import socket
 import threading
-from Queue import Queue, Full
+from Queue import Queue, Full, Empty
 
 import requests
+import time
+from dnif.exception import DnifException
 
 
 class Consumer(object):
+    def start(self, data, **kwargs):
+        raise NotImplementedError
+
+    def stop(self, data, **kwargs):
+        raise NotImplementedError
+
     def send(self, data):
         raise NotImplementedError
 
 
-class AsyncConsumer(Consumer):
+class AsyncBufferedConsumer(Consumer):
     """ (Abstract) Consumer that uploads logs asynchronously in the background . """
 
     def __init__(self, buffer_size=1024):
@@ -22,19 +30,28 @@ class AsyncConsumer(Consumer):
         """
         self._queue = Queue(maxsize=buffer_size)
         self._logger = logging.getLogger('dnif.consumer.' + self.__class__.__name__)
+        self._stop = self._force_stop = True
+        self._thread = None
 
-        # TODO: This shouldn't be a Daemon and should listen for shutdown events.
+    def start(self, daemon=False, **kwargs):
+        """ Start uploading. Running in daemon mode could cause data loss!
+        :param daemon: if this is true, background thread will stop automatically with program completion
+          without the need to explicitly call stop()
+        """
+        if self._thread and self._thread.isAlive():
+            raise DnifException('already running')
+
+        self._stop = self._force_stop = False
         self._thread = threading.Thread(target=self.upload)
-        self._thread.daemon = True
+        self._thread.daemon = bool(daemon)
         self._thread.start()
 
-    def validate(self, data):
+    def stop(self, force=False, **kwargs):
+        """ Stop uploading. Forcing stop could cause data loss!
+        :param force: stops upload immediately, dropping any pending uploads
         """
-        Validate the data packet, and return the validated packet
-        :param data: the data packet to send
-        :return:
-        """
-        raise NotImplementedError
+        self._stop = True
+        self._force_stop = force
 
     def send(self, data):
         """ Send the data to the target endpoint.
@@ -42,6 +59,10 @@ class AsyncConsumer(Consumer):
 
         :param data: Data to upload
         """
+        if self._stop:
+            # don't add to the worker thread's burden after stop has been signalled
+            return
+
         data = self.validate(data)
         if not data:
             return
@@ -51,6 +72,13 @@ class AsyncConsumer(Consumer):
         except Full:
             self._logger.info('Dropping data because max buffer size reached: {0}'.format(data))
 
+    def validate(self, data):
+        """
+        Validate the data packet, and return the validated packet
+        :param data: the data packet to send
+        """
+        raise NotImplementedError
+
     def upload(self):
         """
         Actually upload
@@ -58,16 +86,17 @@ class AsyncConsumer(Consumer):
         raise NotImplementedError
 
 
-class AsyncHttpConsumer(AsyncConsumer):
+class AsyncHttpConsumer(AsyncBufferedConsumer):
     """ Consumer that uploads logs to the specified endpoint using HTTP. """
 
-    def __init__(self, url, buffer_size=1024):
+    def __init__(self, url, buffer_size=1024, batch_size=100):
         """
         :param url: The target URL
         :param buffer_size: Max number of pending payloads to hold (in memory).
         """
         self._url = url
         self._timeout = 15
+        self._batch_size = batch_size
         super(AsyncHttpConsumer, self).__init__(buffer_size)
 
     def _validate_unit(self, data):
@@ -80,8 +109,8 @@ class AsyncHttpConsumer(AsyncConsumer):
 
     def validate(self, data):
         if not isinstance(data, (dict, list, tuple)):
-            self._logger.info('Skipping sending data packet. Data must be listobject: {0}'.format(data))
-            return
+            self._logger.info('Skipping sending data packet. Data must be list/dict: {0}'.format(data))
+            return None
 
         if isinstance(data, dict):
             data = [data]
@@ -94,17 +123,38 @@ class AsyncHttpConsumer(AsyncConsumer):
         return final
 
     def upload(self):
-        while True:
-            # TODO: Batch payloads and send as one request
-            payload = self._queue.get(block=True)
+        while not self._force_stop:
+            contents = []
             try:
-                resp = requests.post(self._url, json=payload, timeout=self._timeout, verify=False)
-                # self._logger.debug(resp.status_code)
-            except Exception as ex:
-                self._logger.info('Error uploading log: {0}'.format(ex))
+                for i in range(self._batch_size):
+                    data = self._queue.get_nowait()
+                    if isinstance(data, list):
+                        contents.extend(data)
+                    else:
+                        contents.append(data)
+            except Empty:
+                pass
+
+            if not contents:
+                if self._stop:
+                    # loop's primary exit condition
+                    break
+                time.sleep(1)
+            else:
+                # check force stop flag again before making request
+                if self._force_stop:
+                    break
+
+                try:
+                    resp = requests.post(self._url, json=contents, timeout=self._timeout, verify=False)
+                    # self._logger.debug(resp.status_code)
+                except Exception as ex:
+                    self._logger.info('Error uploading log: {0}'.format(ex))
+
+        self._logger.info('Background uploader stopped.')
 
 
-class AsyncUDPConsumer(AsyncConsumer):
+class AsyncUDPConsumer(AsyncBufferedConsumer):
     """ Consumer that uploads logs to the specified endpoint using UDP """
 
     def __init__(self, target_ip, target_port, buffer_size=1024):
@@ -126,10 +176,21 @@ class AsyncUDPConsumer(AsyncConsumer):
             return None
 
     def upload(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        while True:
-            message = self._queue.get(block=True)
-            try:
-                sock.sendto(message, (self._target_ip, self._target_port))
-            except Exception as ex:
-                self._logger.info('Error uploading log: {0}'.format(ex))
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            while not self._force_stop:
+                try:
+                    message = self._queue.get(block=True, timeout=1)
+
+                    # check force stopped flag again before making request
+                    if self._force_stop:
+                        break
+
+                    try:
+                        sock.sendto(message, (self._target_ip, self._target_port))
+                    except Exception as ex:
+                        self._logger.info('Error uploading log: {0}'.format(ex))
+                except Empty:
+                    if self._stop:
+                        break  # loop's primary exit condition
+
+        self._logger.info('Background uploader stopped.')

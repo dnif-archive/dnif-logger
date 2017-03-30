@@ -10,6 +10,7 @@ max_buffer_size = 1024  # optional
 
 # Initialize DNIF logger using the HTTP Consumer
 dlog = DnifLogger(AsyncHttpConsumer(url, buffer_size=max_buffer_size))
+dlog.start()
 
 # Send single log statement
 payload = {
@@ -28,3 +29,6 @@ payload = [
     {'key1': 3},
 ]
 dlog.log(payload)
+
+# Stop. This is *required* when using an async consumer.
+dlog.stop(force=False)
