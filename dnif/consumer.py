@@ -176,21 +176,22 @@ class AsyncUDPConsumer(AsyncBufferedConsumer):
             return None
 
     def upload(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            while not self._force_stop:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        while not self._force_stop:
+            try:
+                message = self._queue.get(block=True, timeout=1)
+
+                # check force stopped flag again before making request
+                if self._force_stop:
+                    break
+
                 try:
-                    message = self._queue.get(block=True, timeout=1)
+                    sock.sendto(message, (self._target_ip, self._target_port))
+                except Exception as ex:
+                    self._logger.info('Error uploading log: {0}'.format(ex))
+            except Empty:
+                if self._stop:
+                    break  # loop's primary exit condition
 
-                    # check force stopped flag again before making request
-                    if self._force_stop:
-                        break
-
-                    try:
-                        sock.sendto(message, (self._target_ip, self._target_port))
-                    except Exception as ex:
-                        self._logger.info('Error uploading log: {0}'.format(ex))
-                except Empty:
-                    if self._stop:
-                        break  # loop's primary exit condition
-
+        sock.close()
         self._logger.info('Background uploader stopped.')
