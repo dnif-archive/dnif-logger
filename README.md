@@ -21,7 +21,6 @@ from dnif.logger import DnifLogger
 dlog = DnifLogger(AsyncHttpConsumer('http://TARGET_IP:PORT/json/receive'))
 dlog.log({'key': 'value'})
 ```
-
 The AsyncHttpConsumer is thread-safe, so you can use the same instance
 across threads (recommended).
 
@@ -32,3 +31,5 @@ from dnif.logger import DnifLogger
 dlog = DnifLogger(AsyncUDPConsumer('UDP_IP', UDP_PORT))
 dlog.log('Hello World')
 ```
+The AsyncUDPConsumer is thread-safe, so you can use the same instance
+across threads (recommended).
