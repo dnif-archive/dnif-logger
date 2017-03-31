@@ -1,0 +1,2 @@
+class DnifException(Exception):
+    pass
