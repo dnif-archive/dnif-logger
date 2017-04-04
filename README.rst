@@ -12,7 +12,7 @@ You can download the library using pip, as:
 
 .. code:: sh
 
-    $ pip install dnif-logger
+    $ pip install dnif
 
 Getting Started
 ---------------
